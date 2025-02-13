@@ -17,7 +17,6 @@ URL = "http://192.168.10.1/LastLog.cgi?lognum=21"
 # URL = "http://host.docker.internal:9001/LastLog.cgi"
 
 ## mosquitto_pub -d -q 1 -h mqtt.thingsboard.cloud -p 1883 -t v1/devices/me/telemetry -u "7Mv5BGOOqQmLfN7xlZbU" -m "{temperature:25}"
-
 TOPIC = "v1/devices/me/telemetry"
 MQTT_HOST =  "mqtt.thingsboard.cloud"
 MQTT_PORT = 1883
@@ -30,22 +29,10 @@ DB_CONFIG = {
     "database": "mydatabase",
     "port": 3306  
 }
-# def on_connect(client, userdata, flags, rc):
-#     if rc == 0:
-#         print("Connected to ThingsBoard MQTT broker!")
-#     else:
-#         print(f"Connection failed with code {rc}")
-
-# def on_publish(client, userdata, mid):
-#     print(f"Message {mid} published.")
 
 client = mqtt.Client()
 client.username_pw_set(ACCESS_TOKEN)  # Set access token
-# client.on_connect = on_connect
-# client.on_publish = on_publish
-
 client.connect(MQTT_HOST, MQTT_PORT, 60)
-# client.loop_start()
 
 def insert_csv_file(df):
     now = datetime.now()
@@ -71,66 +58,28 @@ def insert_csv_file(df):
         df_combined.to_csv(output_path, index=False)
 
 # [{"ts":1451649600512, "values":{"key1":"value1", "key2":"value2"}}, {...}, {...}]
+
 def data_convert_to_dashboard(df):
     print("start send matt...")
-    # data = [
-    #         {"ts": 1738915970000, "values": {"VOC": 1866, "CO2": 448, "CH2O": 0.0, "eVOC": 0, "Humid": 52.9, "Temp": 28.6, "PM2.5": 220.7, "PM10": 220.9, "CO": 0.0}},
-    #         {"ts": 1738915980000, "values": {"VOC": 1966, "CO2": 448, "CH2O": 0.0, "eVOC": 0, "Humid": 52.9, "Temp": 28.6, "PM2.5": 220.7, "PM10": 220.9, "CO": 0.0}},
-    #         {"ts": 1738915990000, "values": {"VOC": 1966, "CO2": 448, "CH2O": 0.0, "eVOC": 0, "Humid": 52.9, "Temp": 28.6, "PM2.5": 220.7, "PM10": 220.9, "CO": 0.0}},
-    #         {"ts": 1738916000000, "values": {"VOC": 2866, "CO2": 448, "CH2O": 0.0, "eVOC": 0, "Humid": 52.9, "Temp": 28.6, "PM2.5": 220.7, "PM10": 220.9, "CO": 0.0}},
-    #         {"ts": 1738916010000, "values": {"VOC": 3966, "CO2": 448, "CH2O": 0.0, "eVOC": 0, "Humid": 52.9, "Temp": 28.6, "PM2.5": 220.7, "PM10": 220.9, "CO": 0.0}},
-    #         {"ts": 1738916020000, "values": {"VOC": 4966, "CO2": 448, "CH2O": 0.0, "eVOC": 0, "Humid": 52.9, "Temp": 28.6, "PM2.5": 220.7, "PM10": 220.9, "CO": 0.0}},
-    #         ]
     data = []
-    # i = 0
-    # for _, row in  df.iterrows():
-    #     i = i + 1
-    #     if i == 1:
-    #         pass
-    #     else:
-            
-    #         payload = {
-    #             "ts": row['ms'],
-    #             "values": {
-    #                 "VOC": row['VOC(ppb)'],
-    #                 "CO2": row['CO2(ppm)'],
-    #                 "CH2O": row['CH2O(ppm)'],
-    #                 "eVOC": row['eVOC(ppb)'],
-    #                 "Humid": row['Humid(%)'],
-    #                 "Temp": row['Temp(C)'],
-    #                 "PM2.5": row['PM2.5(ug/m3)'],
-    #                 "PM10": row['PM10(ug/m3)'],
-    #                 "CO": row['CO(ppm)']
-    #             }
-    #         }
-    #         data.append(payload)
-    #     if i >= 22:
-    #         break
-    
     for _, row in  df.iterrows():
-        i = i + 1
-        if i == 1:
-            pass
-        else:
-            payload = {
-                "ts": row['ms'],
-                "values": {
-                    "VOC": row['VOC(ppb)'],
-                    "CO2": row['CO2(ppm)'],
-                    "CH2O": row['CH2O(ppm)'],
-                    "eVOC": row['eVOC(ppb)'],
-                    "Humid": row['Humid(%)'],
-                    "Temp": row['Temp(C)'],
-                    "PM2.5": row['PM2.5(ug/m3)'],
-                    "PM10": row['PM10(ug/m3)'],
-                    "CO": row['CO(ppm)']
-                }
+        payload = {
+            "ts": row['ms'],
+            "values": {
+                "VOC": row['VOC(ppb)'],
+                "CO2": row['CO2(ppm)'],
+                "CH2O": row['CH2O(ppm)'],
+                "eVOC": row['eVOC(ppb)'],
+                "Humid": row['Humid(%)'],
+                "Temp": row['Temp(C)'],
+                "PM2.5": row['PM2.5(ug/m3)'],
+                "PM10": row['PM10(ug/m3)'],
+                "CO": row['CO(ppm)']
             }
-            data.append(payload)
-    
+        }
+        data.append(payload)
     payload_json = json.dumps(data)
     result = client.publish(TOPIC, payload_json)
-
     if result.rc == mqtt.MQTT_ERR_SUCCESS:
         print(f"Published: {payload_json}")
     else:
@@ -147,17 +96,6 @@ def insert_data(df):
         insert_query = "INSERT INTO airQuality (strDatetime, ms, VOC, CO2, CH2O, eVOC, Humid, Temp, `PM2.5`, `PM10`, CO) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
         print("cursor.execute(insert_query, values)")
         for _, row in df.iterrows():
-            # print("row =>", row['strDatetime'], type(row['strDatetime']))
-            # print("row =>", row['ms'] , type(row['ms']))
-            # print("row =>", row['VOC(ppb)'] , type(row['VOC(ppb)']))
-            # print("row =>", row['CO2(ppm)'] , type(row['CO2(ppm)']))
-            # print("row =>", row['CH2O(ppm)'], type(row['CH2O(ppm)']))
-            # print("row =>", row['eVOC(ppb)'], type(row['eVOC(ppb)']))
-            # print("row =>", row['Humid(%)'], type(row['Humid(%)']))
-            # print("row =>", row['Temp(C)'], type(row['Temp(C)']))
-            # print("row =>", row['PM2.5(ug/m3)'], type(row['PM2.5(ug/m3)']))
-            # print("row =>", row['PM10(ug/m3)'], type(row['PM10(ug/m3)']))
-            # print("row =>", row['CO(ppm)'], type(row['CO(ppm)']))
             values = (
                 # row['Date Time'], 
                 str(row['strDatetime']),
@@ -184,9 +122,6 @@ def insert_data(df):
         cursor.close()
         conn.close()
 
-
-    
-
 def data_convert(table):
     headers = [th.text.strip() for th in table.find_all("tr")[0].find_all("td")]
     data = []
@@ -194,7 +129,6 @@ def data_convert(table):
         cols = [td.text.strip() for td in row.find_all("td")]
         if len(cols) == len(headers):  
             data.append(cols)
-
     df = pd.DataFrame(data, columns=headers)
     string_data = df['Date Time']
     # print(string_data)
