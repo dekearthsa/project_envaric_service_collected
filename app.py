@@ -11,10 +11,12 @@ import os
 
 
 URL = "http://192.168.10.1/LastLog.cgi?lognum=21"
+# URL = "http://localhost:9001/LastLog.cgi"
 TOPIC = "v1/devices/me/telemetry"
 MQTT_HOST =  "mqtt.thingsboard.cloud"
 MQTT_PORT = 1883
 ACCESS_TOKEN = "7Mv5BGOOqQmLfN7xlZbU"
+IS_STANDBY_DATA = True
 
 DB_CONFIG = {
     "host": "localhost",  
@@ -28,16 +30,14 @@ client = mqtt.Client()
 client.username_pw_set(ACCESS_TOKEN)
 
 def on_connect(client, userdata, flags, rc):
-
     if rc == 0:
         print("Connected to MQTT broker successfully.")
     else:
         print(f"Failed to connect. Error code = {rc}")
 
 def on_disconnect(client, userdata, rc):
-
     if rc != 0:
-        print("Unexpected disconnection. Reconnecting...")
+        print("disconnection. Reconnecting...")
         try:
             client.reconnect()
         except Exception as e:
@@ -92,8 +92,9 @@ def data_convert_to_dashboard(df):
         data.append(payload)
     payload_json = json.dumps(data)
     result = client.publish(TOPIC, payload_json)
+    # print(result)
     if result.rc == mqtt.MQTT_ERR_SUCCESS:
-        print(f"Published payload successfully: {payload_json}")
+        print(f"Published payload successfully")
     else:
         print("Failed to publish MQTT message.")
 
@@ -124,14 +125,17 @@ def insert_data(df):
             cursor.execute(insert_query, values)
         conn.commit()
         # print("Data inserted successfully!")
-
-        data_convert_to_dashboard(df)
+        # data_convert_to_dashboard(df)
     except mysql.connector.Error as e:
         print(f"Database Insert Error: {e}")
     finally:
         cursor.close()
         conn.close()
         print("DB connection closed.")
+
+def stanby_data(df):
+    output_path = f"./csv/waiting_data/data.csv"
+    df.to_csv(output_path, index=False)
 
 def data_convert(table):
     headers = [th.text.strip() for th in table.find_all("tr")[0].find_all("td")]
@@ -165,12 +169,13 @@ def data_convert(table):
     for col in df.columns[1:]:
         df[col] = pd.to_numeric(df[col], errors='coerce')
     df['strDatetime'] = string_data
-    insert_data(df)
-    # insert_csv_file(df)
+    print(df)
+    data_convert_to_dashboard(df)
+    # insert_data(df)
 
 def fetch_data():
     try:
-        # print("Fetching data from:", URL)
+        print("Fetching data from:", URL)
         res = requests.get(URL, timeout=30)
         if res.status_code == 200:
             soup = BeautifulSoup(res.text, "html.parser")
