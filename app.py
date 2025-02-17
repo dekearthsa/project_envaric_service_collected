@@ -9,16 +9,13 @@ import paho.mqtt.client as mqtt
 import json
 import os
 
-### URL production
-URL = "http://192.168.10.1/LastLog.cgi?lognum=21"
 
-## MQTT Configuration
+URL = "http://192.168.10.1/LastLog.cgi?lognum=21"
 TOPIC = "v1/devices/me/telemetry"
 MQTT_HOST =  "mqtt.thingsboard.cloud"
 MQTT_PORT = 1883
 ACCESS_TOKEN = "7Mv5BGOOqQmLfN7xlZbU"
 
-## Database configuration
 DB_CONFIG = {
     "host": "localhost",  
     "user": "root",
@@ -27,28 +24,18 @@ DB_CONFIG = {
     "port": 3306  
 }
 
-###################################################
-# Set up MQTT client and reconnect logic
-###################################################
 client = mqtt.Client()
-
-# Set the ThingsBoard access token as username (no password needed)
 client.username_pw_set(ACCESS_TOKEN)
 
 def on_connect(client, userdata, flags, rc):
-    """
-    Callback when the client connects to the broker.
-    """
+
     if rc == 0:
         print("Connected to MQTT broker successfully.")
     else:
         print(f"Failed to connect. Error code = {rc}")
 
 def on_disconnect(client, userdata, rc):
-    """
-    Callback when the client disconnects from the broker.
-    If rc != 0, it means the disconnection is unexpected.
-    """
+
     if rc != 0:
         print("Unexpected disconnection. Reconnecting...")
         try:
@@ -58,23 +45,13 @@ def on_disconnect(client, userdata, rc):
     else:
         print("Disconnected from MQTT broker.")
 
-# Attach callbacks
+
 client.on_connect = on_connect
 client.on_disconnect = on_disconnect
-
-# Establish connection to broker
 client.connect(MQTT_HOST, MQTT_PORT, 60)
-# Start the network loop in a separate thread
 client.loop_start()
 
-###################################################
-# Data insertion and CSV logic
-###################################################
 def insert_csv_file(df):
-    """
-    Append new data to a daily CSV file (based on current date).
-    Create directory if not exists.
-    """
     now = datetime.now()
     path_time_stamp = now.strftime("%d_%m_%y")
     output_path = f"./csv/{path_time_stamp}/data.csv"
@@ -95,11 +72,7 @@ def insert_csv_file(df):
     df_combined.to_csv(output_path, index=False)
 
 def data_convert_to_dashboard(df):
-    """
-    Convert the dataframe rows into the ThingsBoard telemetry format
-    and publish via MQTT.
-    """
-    print("Start sending data via MQTT...")
+    # print("Start sending data via MQTT...")
     data = []
     for _, row in df.iterrows():
         payload = {
@@ -125,10 +98,7 @@ def data_convert_to_dashboard(df):
         print("Failed to publish MQTT message.")
 
 def insert_data(df):
-    """
-    Insert data into MySQL database, then publish to MQTT.
-    """
-    print("Start DB insert...")
+    # print("Start DB insert...")
     try:
         conn = mysql.connector.connect(**DB_CONFIG)
         cursor = conn.cursor()
@@ -153,9 +123,8 @@ def insert_data(df):
             )
             cursor.execute(insert_query, values)
         conn.commit()
-        print("Data inserted successfully!")
-        
-        # After insertion, publish the data to ThingsBoard
+        # print("Data inserted successfully!")
+
         data_convert_to_dashboard(df)
     except mysql.connector.Error as e:
         print(f"Database Insert Error: {e}")
@@ -165,11 +134,6 @@ def insert_data(df):
         print("DB connection closed.")
 
 def data_convert(table):
-    """
-    Convert the HTML table content into a Pandas dataframe, then parse date/time
-    and numeric columns, and finally push to DB & CSV.
-    """
-    # Extract headers
     headers = [th.text.strip() for th in table.find_all("tr")[0].find_all("td")]
     data = []
     for row in table.find_all("tr")[1:]:
@@ -178,8 +142,6 @@ def data_convert(table):
             data.append(cols)
 
     df = pd.DataFrame(data, columns=headers)
-
-    # Keep a string backup of Date Time
     string_data = df['Date Time']
     df["strDatetime"] = df['Date Time']
 
@@ -200,24 +162,15 @@ def data_convert(table):
 
     df['ms'] = df['strDatetime'].apply(parse_ms)
     df = df.drop(columns=['strDatetime'])
-
-    # Convert numeric columns
     for col in df.columns[1:]:
         df[col] = pd.to_numeric(df[col], errors='coerce')
-
-    # Add back stringDateTime for DB insertion
     df['strDatetime'] = string_data
-
-    # Insert into DB and also store as CSV
     insert_data(df)
-    insert_csv_file(df)
+    # insert_csv_file(df)
 
 def fetch_data():
-    """
-    Fetch the data from the endpoint, parse via BeautifulSoup, and convert.
-    """
     try:
-        print("Fetching data from:", URL)
+        # print("Fetching data from:", URL)
         res = requests.get(URL, timeout=30)
         if res.status_code == 200:
             soup = BeautifulSoup(res.text, "html.parser")
@@ -231,15 +184,11 @@ def fetch_data():
     except Exception as e:
         print(f"Exception in fetch_data: {e}")
 
-###################################################
-# Scheduling
-###################################################
+fetch_data()
 schedule.every(1).minutes.do(fetch_data)
 
 if __name__ == "__main__":
     print("Starting HTTP polling + MQTT service...")
-    
-    # Main loop to run schedule
     while True:
         schedule.run_pending()
         time.sleep(1)
