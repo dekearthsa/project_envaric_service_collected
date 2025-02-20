@@ -15,7 +15,7 @@ URL = "http://192.168.10.1/LastLog.cgi?lognum=21"
 TOPIC = "v1/devices/me/telemetry"
 MQTT_HOST =  "mqtt.thingsboard.cloud"
 MQTT_PORT = 1883
-ACCESS_TOKEN = "7Mv5BGOOqQmLfN7xlZbU"
+ACCESS_TOKEN = ""
 IS_STANDBY_DATA = True
 
 DB_CONFIG = {
