@@ -8,15 +8,21 @@ from datetime import datetime
 import paho.mqtt.client as mqtt
 import json
 import os
-
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.common.by import By
+from selenium.webdriver.chrome.options import Options
 
 URL = "http://192.168.10.1/LastLog.cgi?lognum=21"
-# URL = "http://localhost:9001/LastLog.cgi"
+URL_VAM = "http://172.31.76.171"
+
 TOPIC = "v1/devices/me/telemetry"
 MQTT_HOST =  "mqtt.thingsboard.cloud"
 MQTT_PORT = 1883
 ACCESS_TOKEN = ""
 IS_STANDBY_DATA = True
+
+IS_VAM_DATA = []
 
 DB_CONFIG = {
     "host": "localhost",  
@@ -98,6 +104,32 @@ def data_convert_to_dashboard(df):
     else:
         print("Failed to publish MQTT message.")
 
+def insert_data_vam_data(vam_data):
+    try:
+        now = datetime.now()
+        path_time_stamp = now.strftime("%d/%m/%y %H:%M:%S")
+        conn = mysql.connector.connect(**DB_CONFIG)
+        cursor = conn.cursor()
+        insert_query = """
+            INSERT INTO VAM_DATA 
+            (strDatetime, temp, eVOC, Co2)
+            VALUES (%s, %s, %s, %s)
+        """
+        values = (
+            str(path_time_stamp),
+            float(vam_data[0]),
+            float(vam_data[1]),
+            float(vam_data[2])
+        )
+        cursor.execute(insert_query, values)
+        conn.commit()
+    except mysql.connector.Error as e:
+        print(f"Database Insert Error: {e}")
+    finally:
+        cursor.close()
+        conn.close()
+        print("DB connection closed.")
+
 def insert_data(df):
     # print("Start DB insert...")
     try:
@@ -120,7 +152,7 @@ def insert_data(df):
                 float(row['Temp(C)']), 
                 float(row['PM2.5(ug/m3)']), 
                 float(row['PM10(ug/m3)']), 
-                float(row['CO(ppm)'])
+                float(row['CO(ppm)']),
             )
             cursor.execute(insert_query, values)
         conn.commit()
@@ -137,7 +169,7 @@ def stanby_data(df):
     output_path = f"./csv/waiting_data/data.csv"
     df.to_csv(output_path, index=False)
 
-def data_convert(table):
+def data_convert(table, vam_data):
     headers = [th.text.strip() for th in table.find_all("tr")[0].find_all("td")]
     data = []
     for row in table.find_all("tr")[1:]:
@@ -169,9 +201,32 @@ def data_convert(table):
     for col in df.columns[1:]:
         df[col] = pd.to_numeric(df[col], errors='coerce')
     df['strDatetime'] = string_data
-    print(df)
     data_convert_to_dashboard(df)
-    # insert_data(df)
+    insert_data(df)
+
+def fetch_data_with_selenium():
+    try:
+        chrome_options = Options()
+        chrome_options.add_argument("--headless")
+        chrome_options.add_argument("--no-sandbox")
+        chrome_options.add_argument("--disable-dev-shm-usage")
+        chrome_options.add_argument("--disable-gpu")
+        chrome_options.add_argument("--remote-debugging-port=9222")
+        chrome_options.binary_location = "/usr/bin/chromium-browser"
+        service = Service('/usr/lib/chromium-browser/chromedriver')
+
+        driver = webdriver.Chrome(service=service, options=chrome_options)
+        driver.get(URL_VAM)
+
+        data_divs = driver.find_elements(By.CLASS_NAME, "dVal")
+        data_values = [float(div.text) for div in data_divs]
+
+        driver.quit()
+        insert_data_vam_data(data_values)
+
+    except Exception as e:
+        print(f"Exception in fetch_data_with_selenium: {e}")
+
 
 def fetch_data():
     try:
@@ -182,6 +237,7 @@ def fetch_data():
             table = soup.find("table", style="text-align:center;width:100%;border:1px solid black;border-collapse: collapse;")
             if table:
                 data_convert(table)
+                fetch_data_with_selenium()
             else:
                 print("No valid table found on page.")
         else:
