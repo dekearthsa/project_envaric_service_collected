@@ -227,7 +227,7 @@ def fetch_data_with_selenium():
     except Exception as e:
         print(f"Exception in fetch_data_with_selenium: {e}")
 
-
+###
 def fetch_data():
     try:
         print("Fetching data from:", URL)
